@@ -1,0 +1,10 @@
+{application,spandex_phoenix,
+             [{applications,[kernel,stdlib,elixir,logger,plug,spandex]},
+              {description,"Tools for integrating Phoenix with Spandex.\n"},
+              {modules,['Elixir.SpandexPhoenix',
+                        'Elixir.SpandexPhoenix.Instrumenter',
+                        'Elixir.SpandexPhoenix.Plug.AddContext',
+                        'Elixir.SpandexPhoenix.Plug.FinishTrace',
+                        'Elixir.SpandexPhoenix.Plug.StartTrace']},
+              {registered,[]},
+              {vsn,"0.3.1"}]}.

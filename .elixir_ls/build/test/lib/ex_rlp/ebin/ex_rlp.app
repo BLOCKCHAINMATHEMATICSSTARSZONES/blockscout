@@ -1,0 +1,10 @@
+{application,ex_rlp,
+             [{applications,[kernel,stdlib,elixir,logger]},
+              {description,"Ethereum's Recursive Length Prefix (RLP) encoding"},
+              {modules,['Elixir.ExRLP','Elixir.ExRLP.Decode',
+                        'Elixir.ExRLP.DecodeItem','Elixir.ExRLP.Encode',
+                        'Elixir.ExRLP.Encode.BitString',
+                        'Elixir.ExRLP.Encode.Integer',
+                        'Elixir.ExRLP.Encode.List','Elixir.ExRLP.Utils']},
+              {registered,[]},
+              {vsn,"0.5.2"}]}.

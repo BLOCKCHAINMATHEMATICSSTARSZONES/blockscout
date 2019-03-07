@@ -1,0 +1,10 @@
+{application,ex_abi,
+             [{applications,[kernel,stdlib,elixir,logger,exth_crypto]},
+              {description,"Ethereum's ABI Interface"},
+              {modules,['Elixir.ABI','Elixir.ABI.Event',
+                        'Elixir.ABI.FunctionSelector','Elixir.ABI.Parser',
+                        'Elixir.ABI.TypeDecoder','Elixir.ABI.TypeEncoder',
+                        'Elixir.ABI.Util',ethereum_abi_lexer,
+                        ethereum_abi_parser]},
+              {registered,[]},
+              {vsn,"0.1.18"}]}.

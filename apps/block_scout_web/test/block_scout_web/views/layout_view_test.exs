@@ -41,11 +41,11 @@ defmodule BlockScoutWeb.LayoutViewTest do
     test "use the enviroment subnetwork title when it's configured" do
       Application.put_env(:block_scout_web, BlockScoutWeb.Chain, subnetwork: "Subnetwork Test")
 
-      assert LayoutView.subnetwork_title() == "Subnetwork Test"
+      assert LayoutView.subnetwork_title() == "Matic Network"
     end
 
     test "use the default subnetwork title when there is no env configured for it" do
-      assert LayoutView.subnetwork_title() == "Sokol Testnet"
+      assert LayoutView.subnetwork_title() == "Matic Network"
     end
   end
 

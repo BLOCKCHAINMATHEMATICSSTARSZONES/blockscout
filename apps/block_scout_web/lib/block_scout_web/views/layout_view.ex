@@ -16,7 +16,7 @@ defmodule BlockScoutWeb.LayoutView do
   end
 
   def subnetwork_title do
-    Keyword.get(application_config(), :subnetwork) || "Sokol Testnet"
+    Keyword.get(application_config(), :subnetwork) || "Matic Network"
   end
 
   def network_title do
@@ -96,10 +96,9 @@ defmodule BlockScoutWeb.LayoutView do
   end
 
   def other_explorers do
-    if Application.get_env(:block_scout_web, :link_to_other_explorers) do
-      Application.get_env(:block_scout_web, :other_explorers, [])
-    else
-      []
-    end
+    # if Application.get_env(:block_scout_web, :link_to_other_explorers) do
+    #   Application.get_env(:block_scout_web, :other_explorers, [])
+    # else
+    []
   end
 end
