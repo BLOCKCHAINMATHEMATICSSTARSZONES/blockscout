@@ -26,6 +26,7 @@ defmodule Explorer.Factory do
     SmartContract,
     Token,
     TokenTransfer,
+    Token.Instance,
     Transaction,
     StakingPool,
     StakingPoolsDelegator
@@ -147,7 +148,8 @@ defmodule Explorer.Factory do
       size: Enum.random(1..100_000),
       gas_limit: Enum.random(1..100_000),
       gas_used: Enum.random(1..100_000),
-      timestamp: DateTime.utc_now()
+      timestamp: DateTime.utc_now(),
+      refetch_needed: false
     }
   end
 
@@ -538,6 +540,14 @@ defmodule Explorer.Factory do
       address_hash: insert(:address, contract_code: contract_code_info.bytecode, decompiled: true).hash,
       decompiler_version: "test_decompiler",
       decompiled_source_code: contract_code_info.source_code
+    }
+  end
+
+  def token_instance_factory do
+    %Instance{
+      token_contract_address_hash: build(:address),
+      token_id: 5,
+      metadata: %{key: "value"}
     }
   end
 

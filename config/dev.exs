@@ -8,3 +8,4 @@ config :logger, :ecto,
   path: Path.absname("logs/dev/ecto.log")
 
 config :logger, :error, path: Path.absname("logs/dev/error.log")
+

@@ -16,12 +16,13 @@ defmodule Explorer.Chain.Address do
     DecompiledSmartContract,
     Hash,
     InternalTransaction,
-    NetVersionCache,
     SmartContract,
     Token,
     Transaction,
     Wei
   }
+
+  alias Explorer.Chain.Cache.NetVersion
 
   @optional_attrs ~w(contract_code fetched_coin_balance fetched_coin_balance_block_number nonce decompiled verified)a
   @required_attrs ~w(hash)a
@@ -169,7 +170,7 @@ defmodule Explorer.Chain.Address do
   end
 
   def rsk_checksum(hash) do
-    chain_id = NetVersionCache.version()
+    chain_id = NetVersion.get_version()
 
     string_hash =
       hash
@@ -233,6 +234,16 @@ defmodule Explorer.Chain.Address do
       a in Address,
       select: fragment("COUNT(*)"),
       where: a.fetched_coin_balance > ^0
+    )
+  end
+
+  @doc """
+  Counts all the addresses.
+  """
+  def count do
+    from(
+      a in Address,
+      select: fragment("COUNT(*)")
     )
   end
 

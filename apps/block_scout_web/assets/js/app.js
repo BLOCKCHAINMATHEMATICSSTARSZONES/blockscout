@@ -20,6 +20,9 @@ import 'bootstrap'
 
 import './locale'
 
+// support of preload in Firefox
+import '../node_modules/fg-loadcss/dist/cssrelpreload.min'
+
 import './pages/address'
 import './pages/address/coin_balances'
 import './pages/address/transactions'
@@ -34,6 +37,8 @@ import './pages/transactions'
 import './pages/favorites'
 import './pages/network-search'
 import './pages/layout'
+import './pages/verification_form'
+import './pages/dark-mode-switcher'
 
 import './pages/admin/tasks.js'
 
@@ -46,7 +51,6 @@ import './lib/market_history_chart'
 import './lib/pending_transactions_toggle'
 import './lib/pretty_json'
 import './lib/reload_button'
-import './lib/smart_contract/new_smart_contract_form'
 import './lib/smart_contract/read_only_functions'
 import './lib/smart_contract/wei_ether_converter'
 import './lib/stop_propagation'
@@ -58,5 +62,6 @@ import './lib/async_listing_load'
 import './lib/tooltip'
 import './lib/modals'
 import './lib/try_api'
+import './lib/try_eth_api'
 import './lib/card_tabs'
 import './lib/network_selector'

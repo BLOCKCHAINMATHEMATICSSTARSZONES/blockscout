@@ -11,7 +11,9 @@ defmodule Indexer.Block.Fetcher do
 
   alias EthereumJSONRPC.{Blocks, FetchedBeneficiaries}
   alias Explorer.Chain
-  alias Explorer.Chain.{Address, Block, BlockNumberCache, BlocksCache, Hash, Import, Transaction, TransactionsCache}
+  alias Explorer.Chain.{Address, Block, Hash, Import, Transaction}
+  alias Explorer.Chain.Cache.Blocks, as: BlocksCache
+  alias Explorer.Chain.Cache.{Accounts, BlockNumber, PendingTransactions, Transactions, Uncles}
   alias Indexer.Block.Fetcher.Receipts
 
   alias Indexer.Fetcher.{
@@ -173,7 +175,9 @@ defmodule Indexer.Block.Fetcher do
            ) do
       result = {:ok, %{inserted: inserted, errors: blocks_errors}}
       update_block_cache(inserted[:blocks])
-      update_transactions_cache(inserted[:transactions])
+      update_transactions_cache(inserted[:transactions], inserted[:fork_transactions])
+      update_addresses_cache(inserted[:addresses])
+      update_uncles_cache(inserted[:block_second_degree_relations])
       result
     else
       {step, {:error, reason}} -> {:error, {step, reason}}
@@ -181,17 +185,28 @@ defmodule Indexer.Block.Fetcher do
     end
   end
 
-  defp update_block_cache(blocks) do
-    max_block = Enum.max_by(blocks, fn block -> block.number end)
-    min_block = Enum.min_by(blocks, fn block -> block.number end)
+  defp update_block_cache([]), do: :ok
 
-    BlockNumberCache.update(max_block.number)
-    BlockNumberCache.update(min_block.number)
-    BlocksCache.update_blocks(blocks)
+  defp update_block_cache(blocks) when is_list(blocks) do
+    {min_block, max_block} = Enum.min_max_by(blocks, & &1.number)
+
+    BlockNumber.update_all(max_block.number)
+    BlockNumber.update_all(min_block.number)
+    BlocksCache.update(blocks)
   end
 
-  defp update_transactions_cache(transactions) do
-    TransactionsCache.update(transactions)
+  defp update_block_cache(_), do: :ok
+
+  defp update_transactions_cache(transactions, forked_transactions) do
+    Transactions.update(transactions)
+    PendingTransactions.update_pending(transactions)
+    PendingTransactions.update_pending(forked_transactions)
+  end
+
+  defp update_addresses_cache(addresses), do: Accounts.drop(addresses)
+
+  defp update_uncles_cache(updated_relations) do
+    Uncles.update_from_second_degree_relations(updated_relations)
   end
 
   def import(
@@ -265,7 +280,7 @@ defmodule Indexer.Block.Fetcher do
   end
 
   def async_import_internal_transactions(%{transactions: transactions}, EthereumJSONRPC.Geth) do
-    {_, max_block_number} = Chain.fetch_min_and_max_block_numbers()
+    max_block_number = Chain.fetch_max_block_number()
 
     transactions
     |> Enum.flat_map(fn

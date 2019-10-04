@@ -28,24 +28,22 @@ config :block_scout_web,
     "EtherChain" => "https://www.etherchain.org/",
     "Bloxy" => "https://bloxy.info/"
   },
-  other_networks: System.get_env("SUPPORTED_CHAINS")
+  other_networks: System.get_env("SUPPORTED_CHAINS"),
+  webapp_url: System.get_env("WEBAPP_URL"),
+  api_url: System.get_env("API_URL")
 
 config :block_scout_web, BlockScoutWeb.Counters.BlocksIndexedCounter, enabled: true
 
 # Configures the endpoint
 config :block_scout_web, BlockScoutWeb.Endpoint,
   instrumenters: [BlockScoutWeb.Prometheus.Instrumenter, SpandexPhoenix.Instrumenter],
-  http: [
-    protocol_options: [
-      idle_timeout: 90_000
-    ]
-  ],
   url: [
+    scheme: System.get_env("BLOCKSCOUT_PROTOCOL") || "http",
     host: System.get_env("BLOCKSCOUT_HOST") || "localhost",
     path: System.get_env("NETWORK_PATH") || "/"
   ],
   render_errors: [view: BlockScoutWeb.ErrorView, accepts: ~w(html json)],
-  pubsub: [name: BlockScoutWeb.PubSub, adapter: Phoenix.PubSub.PG2]
+  pubsub: [name: BlockScoutWeb.PubSub]
 
 config :block_scout_web, BlockScoutWeb.Tracer,
   service: :block_scout_web,
@@ -63,8 +61,7 @@ config :block_scout_web, BlockScoutWeb.SocialMedia,
 
 config :ex_cldr,
   default_locale: "en",
-  locales: ["en"],
-  gettext: BlockScoutWeb.Gettext
+  default_backend: BlockScoutWeb.Cldr
 
 config :logger, :block_scout_web,
   # keep synced with `config/config.exs`
@@ -90,6 +87,12 @@ config :wobserver,
   # return only the local node
   discovery: :none,
   mode: :plug
+
+config :block_scout_web, BlockScoutWeb.ApiRouter,
+  writing_enabled: System.get_env("DISABLE_WRITE_API") != "true",
+  reading_enabled: System.get_env("DISABLE_READ_API") != "true"
+
+config :block_scout_web, BlockScoutWeb.WebRouter, enabled: System.get_env("DISABLE_WEBAPP") != "true"
 
 # Import environment specific config. This must remain at the bottom
 # of this file so it overrides the configuration defined above.

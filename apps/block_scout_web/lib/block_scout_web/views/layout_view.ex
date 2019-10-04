@@ -62,7 +62,8 @@ defmodule BlockScoutWeb.LayoutView do
     user_agent =
       case Conn.get_req_header(conn, "user-agent") do
         [] -> "unknown"
-        user_agent -> user_agent
+        [user_agent] -> if String.valid?(user_agent), do: user_agent, else: "unknown"
+        _other -> "unknown"
       end
 
     """
@@ -179,4 +180,33 @@ defmodule BlockScoutWeb.LayoutView do
       []
     end
   end
+
+  def webapp_url(conn) do
+    :block_scout_web
+    |> Application.get_env(:webapp_url)
+    |> validate_url()
+    |> case do
+      :error -> chain_path(conn, :show)
+      {:ok, url} -> url
+    end
+  end
+
+  def api_url do
+    :block_scout_web
+    |> Application.get_env(:api_url)
+    |> validate_url()
+    |> case do
+      :error -> ""
+      {:ok, url} -> url
+    end
+  end
+
+  defp validate_url(url) when is_binary(url) do
+    case URI.parse(url) do
+      %URI{host: nil} -> :error
+      _ -> {:ok, url}
+    end
+  end
+
+  defp validate_url(_), do: :error
 end

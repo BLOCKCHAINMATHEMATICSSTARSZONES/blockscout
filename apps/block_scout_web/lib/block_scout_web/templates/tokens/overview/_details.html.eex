@@ -57,8 +57,12 @@
             </span>
             <div class="d-flex flex-row justify-content-start text-muted">
               <span class="mr-4"> <%= @token.type %> </span>
-              <span class="mr-4"><%= @total_token_holders %>  <%= gettext "Addresses" %></span>
-              <span class="mr-4"><%= @total_token_transfers %> <%= gettext "Transfers" %></span>
+              <%= if @total_token_holders > 0 do %>
+                <span class="mr-4"><%= @total_token_holders %>  <%= gettext "Addresses" %></span>
+              <% end %>
+              <%= if @total_token_transfers > 0 do %>
+                <span class="mr-4"><%= @total_token_transfers %> <%= gettext "Transfers" %></span>
+              <% end %>
               <%= if decimals?(@token) do %>
                 <span class="mr-4"><%= @token.decimals %> <%= gettext "Decimals" %></span>
               <% end %>
@@ -79,8 +83,7 @@
                   <%= format_according_to_decimals(@token.total_supply, @token.decimals) %>
                 <% else %>
                   <%= format_integer_to_currency(@token.total_supply) %>
-                <% end %>
-                <%= @token.symbol %>
+                <% end %> <%= @token.symbol %>
               </h3>
               <%= if @token.usd_value do %>
                 <div class="text-uppercase">
@@ -109,7 +112,7 @@
         </button>
       </div>
       <div class="modal-body">
-        <img src="data:image/png;base64, <%= BlockScoutWeb.AddressView.qr_code(@token.contract_address) %> " class="qr-code" alt="qr_code" title="<%= @token.contract_address %>" />
+        <img src="data:image/png;base64, <%= BlockScoutWeb.AddressView.qr_code(@token.contract_address_hash) %> " class="qr-code" alt="qr_code" title="<%= @token.contract_address %>" />
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-primary" data-dismiss="modal"><%= gettext "Close" %></button>
