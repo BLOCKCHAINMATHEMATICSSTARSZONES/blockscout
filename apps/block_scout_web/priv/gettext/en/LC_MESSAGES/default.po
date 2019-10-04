@@ -502,7 +502,7 @@ msgstr ""
 #, elixir-format
 #: lib/block_scout_web/templates/api_docs/_action_tile.html.eex:146
 #: lib/block_scout_web/templates/api_docs/_eth_rpc_item.html.eex:116
-msgid "Ether"
+#msgid "Ether"
 msgstr "MATIC"
 
 #, elixir-format
