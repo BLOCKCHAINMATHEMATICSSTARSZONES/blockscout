@@ -22,9 +22,9 @@ defmodule Explorer.Chain do
       select: 3
     ]
 
-  import EthereumJSONRPC, only: [integer_to_quantity: 1, fetch_block_internal_transactions: 2]
+  import EthereumJSONRPC, only: [integer_to_quantity: 1, json_rpc: 2, fetch_block_internal_transactions: 2]
 
-  alias ABI.TypeDecoder
+  alias ABI.{TypeDecoder, TypeEncoder}
   alias Ecto.Adapters.SQL
   alias Ecto.{Changeset, Multi}
 
@@ -42,6 +42,7 @@ defmodule Explorer.Chain do
     Address.CurrentTokenBalance,
     Address.TokenBalance,
     Block,
+    BridgedToken,
     Data,
     DecompiledSmartContract,
     Hash,
@@ -82,6 +83,13 @@ defmodule Explorer.Chain do
   @default_paging_options %PagingOptions{page_size: 50}
 
   @max_incoming_transactions_count 10_000
+
+  @revert_msg_prefix_1 "Revert: "
+  @revert_msg_prefix_2 "revert: "
+  @revert_msg_prefix_3 "reverted "
+  @revert_msg_prefix_4 "Reverted "
+  # keccak256("Error(string)")
+  @revert_error_method_id "08c379a0"
 
   @typedoc """
   The name of an association on the `t:Ecto.Schema.t/0`
@@ -984,10 +992,38 @@ defmodule Explorer.Chain do
         where: address.hash == ^hash
       )
 
-    query
-    |> join_associations(necessity_by_association)
-    |> with_decompiled_code_flag(hash, query_decompiled_code_flag)
-    |> Repo.one()
+    address_result =
+      query
+      |> join_associations(necessity_by_association)
+      |> with_decompiled_code_flag(hash, query_decompiled_code_flag)
+      |> Repo.one()
+
+    address_updated_result =
+      case address_result do
+        %{smart_contract: smart_contract} ->
+          if smart_contract do
+            address_result
+          else
+            address_verified_twin_contract = Chain.address_verified_twin_contract(hash)
+
+            if address_verified_twin_contract do
+              address_verified_twin_contract_updated =
+                address_verified_twin_contract
+                |> Map.put(:address_hash, hash)
+                |> Map.put_new(:metadata_from_verified_twin, true)
+
+              address_result
+              |> Map.put(:smart_contract, address_verified_twin_contract_updated)
+            else
+              address_result
+            end
+          end
+
+        _ ->
+          address_result
+      end
+
+    address_updated_result
     |> case do
       nil -> {:error, :not_found}
       address -> {:ok, address}
@@ -1026,13 +1062,27 @@ defmodule Explorer.Chain do
 
   @spec search_token(String.t()) :: [Token.t()]
   def search_token(word) do
-    term = String.replace(word, ~r/\W/u, "") <> ":*"
+    term =
+      word
+      |> String.replace(~r/ +/, " & ")
+
+    term_final = term <> ":*"
 
     query =
       from(token in Token,
-        where: fragment("to_tsvector('english', symbol || ' ' || name ) @@ to_tsquery(?)", ^term),
-        limit: 5,
-        select: %{contract_address_hash: token.contract_address_hash, symbol: token.symbol, name: token.name}
+        where: fragment("to_tsvector('english', symbol || ' ' || name ) @@ to_tsquery(?)", ^term_final),
+        select: %{
+          contract_address_hash: token.contract_address_hash,
+          symbol: token.symbol,
+          name:
+            fragment(
+              "'<b>' || coalesce(?, '') || '</b>' || ' (' || coalesce(?, '') || ') ' || '<i>' || coalesce(?::varchar(255), '') || ' holder(s)' || '</i>'",
+              token.name,
+              token.symbol,
+              token.holder_count
+            )
+        },
+        order_by: [desc: token.holder_count]
       )
 
     Repo.all(query)
@@ -1040,13 +1090,16 @@ defmodule Explorer.Chain do
 
   @spec search_contract(String.t()) :: [SmartContract.t()]
   def search_contract(word) do
-    term = String.replace(word, ~r/\W/u, "") <> ":*"
+    term =
+      word
+      |> String.replace(~r/ +/, " & ")
+
+    term_final = term <> ":*"
 
     query =
       from(smart_contract in SmartContract,
-        where: fragment("to_tsvector('english', name ) @@ to_tsquery(?)", ^term),
-        limit: 5,
-        select: %{contract_address_hash: smart_contract.address_hash, symbol: smart_contract.name}
+        where: fragment("to_tsvector('english', name ) @@ to_tsquery(?)", ^term_final),
+        select: %{contract_address_hash: smart_contract.address_hash, name: smart_contract.name}
       )
 
     Repo.all(query)
@@ -1247,10 +1300,38 @@ defmodule Explorer.Chain do
         where: address.hash == ^hash and not is_nil(address.contract_code)
       )
 
-    query
-    |> join_associations(necessity_by_association)
-    |> with_decompiled_code_flag(hash, query_decompiled_code_flag)
-    |> Repo.one()
+    address_result =
+      query
+      |> join_associations(necessity_by_association)
+      |> with_decompiled_code_flag(hash, query_decompiled_code_flag)
+      |> Repo.one()
+
+    address_updated_result =
+      case address_result do
+        %{smart_contract: smart_contract} ->
+          if smart_contract do
+            address_result
+          else
+            address_verified_twin_contract = Chain.address_verified_twin_contract(hash)
+
+            if address_verified_twin_contract do
+              address_verified_twin_contract_updated =
+                address_verified_twin_contract
+                |> Map.put(:address_hash, hash)
+                |> Map.put_new(:metadata_from_verified_twin, true)
+
+              address_result
+              |> Map.put(:smart_contract, address_verified_twin_contract_updated)
+            else
+              address_result
+            end
+          end
+
+        _ ->
+          address_result
+      end
+
+    address_updated_result
     |> case do
       nil -> {:error, :not_found}
       address -> {:ok, address}
@@ -1707,6 +1788,31 @@ defmodule Explorer.Chain do
   end
 
   @doc """
+  Lists the top `t:Explorer.Chain.Token.t/0`'s'.
+
+  """
+  @spec list_top_tokens :: [{Token.t(), non_neg_integer()}]
+  def list_top_tokens(options \\ []) do
+    paging_options = Keyword.get(options, :paging_options, @default_paging_options)
+
+    fetch_top_tokens(paging_options)
+  end
+
+  defp fetch_top_tokens(paging_options) do
+    base_query =
+      from(t in Token,
+        where: t.total_supply > ^0,
+        order_by: [desc: t.holder_count, asc: t.name],
+        preload: [:contract_address]
+      )
+
+    base_query
+    |> page_tokens(paging_options)
+    |> limit(^paging_options.page_size)
+    |> Repo.all()
+  end
+
+  @doc """
   Calls `reducer` on a stream of `t:Explorer.Chain.Block.t/0` without `t:Explorer.Chain.Block.Reward.t/0`.
   """
   def stream_blocks_without_rewards(initial, reducer) when is_function(reducer, 2) do
@@ -1751,6 +1857,43 @@ defmodule Explorer.Chain do
     |> limit(^paging_options.page_size)
     |> order_by(desc: :number)
     |> Repo.all()
+  end
+
+  def check_if_validated_blocks_at_address(address_hash) do
+    Repo.exists?(from(b in Block, where: b.miner_hash == ^address_hash))
+  end
+
+  def check_if_logs_at_address(address_hash) do
+    Repo.exists?(from(l in Log, where: l.address_hash == ^address_hash))
+  end
+
+  def check_if_internal_transactions_at_address(address_hash) do
+    internal_transactions_exists_by_created_contract_address_hash =
+      Repo.exists?(from(it in InternalTransaction, where: it.created_contract_address_hash == ^address_hash))
+
+    internal_transactions_exists_by_from_address_hash =
+      Repo.exists?(from(it in InternalTransaction, where: it.from_address_hash == ^address_hash))
+
+    internal_transactions_exists_by_to_address_hash =
+      Repo.exists?(from(it in InternalTransaction, where: it.to_address_hash == ^address_hash))
+
+    internal_transactions_exists_by_created_contract_address_hash || internal_transactions_exists_by_from_address_hash ||
+      internal_transactions_exists_by_to_address_hash
+  end
+
+  def check_if_token_transfers_at_address(address_hash) do
+    token_transfers_exists_by_from_address_hash =
+      Repo.exists?(from(tt in TokenTransfer, where: tt.from_address_hash == ^address_hash))
+
+    token_transfers_exists_by_to_address_hash =
+      Repo.exists?(from(tt in TokenTransfer, where: tt.to_address_hash == ^address_hash))
+
+    token_transfers_exists_by_from_address_hash ||
+      token_transfers_exists_by_to_address_hash
+  end
+
+  def check_if_tokens_at_address(address_hash) do
+    Repo.exists?(from(tb in CurrentTokenBalance, where: tb.address_hash == ^address_hash))
   end
 
   @doc """
@@ -2099,40 +2242,6 @@ defmodule Explorer.Chain do
     end
   end
 
-  @doc """
-  The height of the chain.
-
-      iex> insert(:block, number: 0)
-      iex> Explorer.Chain.block_height()
-      0
-      iex> insert(:block, number: 1)
-      iex> Explorer.Chain.block_height()
-      1
-
-  If there are no blocks, then the `t:block_height/0` is `0`, unlike `max_consensus_block_chain/0` where it is not found.
-
-      iex> Explorer.Chain.block_height()
-      0
-      iex> Explorer.Chain.max_consensus_block_number()
-      {:error, :not_found}
-
-  It is not possible to differentiate only the genesis block (`number` `0`) and no blocks.  Use
-  `max_consensus_block_chain/0` if you need to differentiate those two scenarios.
-
-      iex> Explorer.Chain.block_height()
-      0
-      iex> insert(:block, number: 0)
-      iex> Explorer.Chain.block_height()
-      0
-
-  Non-consensus blocks are ignored.
-
-      iex> insert(:block, number: 2, consensus: false)
-      iex> insert(:block, number: 1, consensus: true)
-      iex> Explorer.Chain.block_height()
-      1
-
-  """
   @spec block_height() :: block_height()
   def block_height do
     query = from(block in Block, select: coalesce(max(block.number), 0), where: block.consensus == true)
@@ -2742,6 +2851,19 @@ defmodule Explorer.Chain do
       ) do
     json_rpc_named_arguments = Application.get_env(:explorer, :json_rpc_named_arguments)
 
+    gas_hex =
+      if gas do
+        gas_hex_without_prefix =
+          gas
+          |> Decimal.to_integer()
+          |> Integer.to_string(16)
+          |> String.downcase()
+
+        "0x" <> gas_hex_without_prefix
+      else
+        "0x0"
+      end
+
     req =
       EthereumJSONRPCTransaction.eth_call_request(
         0,
@@ -2749,7 +2871,7 @@ defmodule Explorer.Chain do
         data,
         to_address_hash,
         from_address_hash,
-        Decimal.to_integer(gas),
+        gas_hex,
         Wei.hex_format(gas_price),
         Wei.hex_format(value)
       )
@@ -2763,14 +2885,7 @@ defmodule Explorer.Chain do
           ""
       end
 
-    revert_reason_parts = String.split(data, "revert: ")
-
-    formatted_revert_reason =
-      if Enum.count(revert_reason_parts) > 1 do
-        Enum.at(revert_reason_parts, 1)
-      else
-        data
-      end
+    formatted_revert_reason = format_revert_reason_message(data)
 
     if byte_size(formatted_revert_reason) > 0 do
       transaction
@@ -2779,6 +2894,50 @@ defmodule Explorer.Chain do
     end
 
     formatted_revert_reason
+  end
+
+  defp format_revert_reason_message(revert_reason) do
+    case revert_reason do
+      @revert_msg_prefix_1 <> rest ->
+        rest
+
+      @revert_msg_prefix_2 <> rest ->
+        rest
+
+      @revert_msg_prefix_3 <> rest ->
+        extract_revert_reason_message_wrapper(rest)
+
+      @revert_msg_prefix_4 <> rest ->
+        extract_revert_reason_message_wrapper(rest)
+
+      revert_reason_full ->
+        revert_reason_full
+    end
+  end
+
+  defp extract_revert_reason_message_wrapper(revert_reason_message) do
+    case revert_reason_message do
+      "0x" <> hex ->
+        extract_revert_reason_message(hex)
+
+      _ ->
+        revert_reason_message
+    end
+  end
+
+  defp extract_revert_reason_message(hex) do
+    case hex do
+      @revert_error_method_id <> msg_with_offset ->
+        [msg] =
+          msg_with_offset
+          |> Base.decode16!(case: :mixed)
+          |> TypeDecoder.decode_raw([:string])
+
+        msg
+
+      _ ->
+        hex
+    end
   end
 
   @doc """
@@ -3039,6 +3198,52 @@ defmodule Explorer.Chain do
     end
   end
 
+  @doc """
+  Finds metadata for verification of a contract from verified twins: contracts with the same bytecode
+  which were verified previously, returns a single t:SmartContract.t/0
+  """
+  def address_verified_twin_contract(address_hash) do
+    address_verified_twins =
+      case Repo.get(Address, address_hash) do
+        nil ->
+          []
+
+        target_address ->
+          target_address_hash = target_address.hash
+          contract_code = target_address.contract_code
+
+          case contract_code do
+            %Chain.Data{bytes: contract_code_bytes} ->
+              contract_code_md5 =
+                Base.encode16(:crypto.hash(:md5, "\\x" <> Base.encode16(contract_code_bytes, case: :lower)),
+                  case: :lower
+                )
+
+              query =
+                from(
+                  address in Address,
+                  left_join: smart_contract in SmartContract,
+                  on: address.hash == smart_contract.address_hash,
+                  where: fragment("md5(contract_code::text)") == ^contract_code_md5,
+                  where: address.hash != ^target_address_hash,
+                  select: smart_contract
+                )
+
+              query
+              |> Repo.all()
+
+            _ ->
+              []
+          end
+      end
+
+    if Enum.count(address_verified_twins) > 0 do
+      Enum.at(address_verified_twins, 0)
+    else
+      nil
+    end
+  end
+
   @spec address_hash_to_smart_contract(Hash.Address.t()) :: SmartContract.t() | nil
   def address_hash_to_smart_contract(address_hash) do
     query =
@@ -3047,7 +3252,19 @@ defmodule Explorer.Chain do
         where: smart_contract.address_hash == ^address_hash
       )
 
-    Repo.one(query)
+    current_smart_contract = Repo.one(query)
+
+    if current_smart_contract do
+      current_smart_contract
+    else
+      address_verified_twin_contract = Chain.address_verified_twin_contract(address_hash)
+
+      if address_verified_twin_contract do
+        Map.put(address_verified_twin_contract, :address_hash, address_hash)
+      else
+        current_smart_contract
+      end
+    end
   end
 
   defp fetch_transactions(paging_options \\ nil) do
@@ -3110,6 +3327,16 @@ defmodule Explorer.Chain do
       where:
         (address.fetched_coin_balance == ^coin_balance and address.hash > ^hash) or
           address.fetched_coin_balance < ^coin_balance
+    )
+  end
+
+  defp page_tokens(query, %PagingOptions{key: nil}), do: query
+
+  defp page_tokens(query, %PagingOptions{key: {holder_count, contract_address_hash}}) do
+    from(token in query,
+      where:
+        (token.holder_count == ^holder_count and token.contract_address_hash > ^contract_address_hash) or
+          token.holder_count < ^holder_count
     )
   end
 
@@ -3318,6 +3545,153 @@ defmodule Explorer.Chain do
   end
 
   @doc """
+  Returns a list of token addresses `t:Address.t/0`s that don't have an
+  bridged property revealed.
+  """
+  def unprocessed_token_addresses_to_reveal_bridged_tokens do
+    query =
+      from(t in Token,
+        where: is_nil(t.bridged),
+        select: t.contract_address_hash
+      )
+
+    Repo.stream_reduce(query, [], &[&1 | &2])
+  end
+
+  @doc """
+  Fetches bridges status for tokens.
+  """
+  def fetch_tokens_bridged_status(token_addresses) do
+    Enum.each(token_addresses, fn token_address_hash ->
+      created_from_factory_query =
+        from(
+          it in InternalTransaction,
+          inner_join: t in assoc(it, :transaction),
+          where: it.created_contract_address_hash == ^token_address_hash,
+          where: t.status == ^1
+        )
+
+      created_from_factory =
+        created_from_factory_query
+        |> Repo.one()
+
+      if created_from_factory do
+        multi_token_bridge_mediator = Application.get_env(:block_scout_web, :multi_token_bridge_mediator)
+        %{transaction_hash: transaction_hash} = created_from_factory
+
+        if multi_token_bridge_mediator && multi_token_bridge_mediator !== "" do
+          {:ok, multi_token_bridge_mediator_hash} = Chain.string_to_address_hash(multi_token_bridge_mediator)
+
+          created_by_amb_mediator_query =
+            from(
+              it in InternalTransaction,
+              where: it.transaction_hash == ^transaction_hash,
+              where: it.to_address_hash == ^multi_token_bridge_mediator_hash
+            )
+
+          created_by_amb_mediator =
+            created_by_amb_mediator_query
+            |> Repo.all()
+
+          if Enum.count(created_by_amb_mediator) > 0 do
+            json_rpc_named_arguments = Application.get_env(:explorer, :json_rpc_named_arguments)
+            # keccak 256 from getTokenInterfacesVersion()
+            get_token_interfaces_version_signature = "0x859ba28c"
+            # keccak 256 from foreignTokenAddress(address)
+            foreign_token_address_signature = "0x47ac7d6a"
+            # keccak 256 from bridgeContract()
+            bridge_contract_signature = "0xcd596583"
+            # keccak 256 from destinationChainId()
+            destination_chain_id_signature = "0xb0750611"
+
+            token_address_hash_abi_encoded =
+              [token_address_hash.bytes]
+              |> TypeEncoder.encode([:address])
+              |> Base.encode16()
+
+            foreign_token_address_method = foreign_token_address_signature <> token_address_hash_abi_encoded
+
+            with {:ok, _} <-
+                   get_token_interfaces_version_signature
+                   |> Contract.eth_call_request(token_address_hash, 1, nil, nil)
+                   |> json_rpc(json_rpc_named_arguments),
+                 {:ok, foreign_token_address_abi_encoded} <-
+                   foreign_token_address_method
+                   |> Contract.eth_call_request(
+                     multi_token_bridge_mediator,
+                     1,
+                     nil,
+                     nil
+                   )
+                   |> json_rpc(json_rpc_named_arguments),
+                 {:ok, bridge_contract} <-
+                   bridge_contract_signature
+                   |> Contract.eth_call_request(multi_token_bridge_mediator_hash, 1, nil, nil)
+                   |> json_rpc(json_rpc_named_arguments) do
+              "0x" <> foreign_token_address_no_prefix = foreign_token_address_abi_encoded
+
+              <<_prefix::binary-size(24), foreign_token_address_hash_string_raw::binary()>> =
+                foreign_token_address_no_prefix
+
+              foreign_token_address_hash_string = "0x" <> foreign_token_address_hash_string_raw
+
+              {:ok, foreign_token_address_hash} = Chain.string_to_address_hash(foreign_token_address_hash_string)
+
+              "0x" <> bridge_contract_no_prefix = bridge_contract
+              <<_prefix::binary-size(24), multi_token_bridge_hash_string_raw::binary()>> = bridge_contract_no_prefix
+
+              multi_token_bridge_hash_string = "0x" <> multi_token_bridge_hash_string_raw
+
+              {:ok, foreign_chain_id_abi_encoded} =
+                destination_chain_id_signature
+                |> Contract.eth_call_request(multi_token_bridge_hash_string, 1, nil, nil)
+                |> json_rpc(json_rpc_named_arguments)
+
+              "0x" <> foreign_chain_id_abi_encoded_no_prefix = foreign_chain_id_abi_encoded
+              {foreign_chain_id, _} = Integer.parse(foreign_chain_id_abi_encoded_no_prefix, 16)
+
+              set_bridged_token_metadata(token_address_hash, %{
+                foreign_chain_id: foreign_chain_id,
+                foreign_token_address_hash: foreign_token_address_hash
+              })
+
+              set_token_bridged_status(token_address_hash, true)
+            end
+          else
+            set_token_bridged_status(token_address_hash, false)
+          end
+        end
+      else
+        set_token_bridged_status(token_address_hash, false)
+      end
+    end)
+
+    :ok
+  end
+
+  defp set_token_bridged_status(token_address_hash, status) do
+    target_token = Repo.get!(Token, token_address_hash)
+    token = Changeset.change(target_token, bridged: status)
+
+    Repo.update(token)
+  end
+
+  defp set_bridged_token_metadata(token_address_hash, %{
+         foreign_chain_id: foreign_chain_id,
+         foreign_token_address_hash: foreign_token_address_hash
+       }) do
+    {:ok, _} =
+      Repo.insert(
+        %BridgedToken{
+          home_token_contract_address_hash: token_address_hash,
+          foreign_chain_id: foreign_chain_id,
+          foreign_token_contract_address_hash: foreign_token_address_hash
+        },
+        on_conflict: :nothing
+      )
+  end
+
+  @doc """
   Fetches a `t:Token.t/0` by an address hash.
 
   ## Options
@@ -3336,8 +3710,11 @@ defmodule Explorer.Chain do
 
     query =
       from(
-        token in Token,
-        where: token.contract_address_hash == ^hash
+        t in Token,
+        left_join: bt in BridgedToken,
+        on: t.contract_address_hash == bt.home_token_contract_address_hash,
+        where: t.contract_address_hash == ^hash,
+        select: [t, bt]
       )
 
     query
@@ -3347,7 +3724,18 @@ defmodule Explorer.Chain do
       nil ->
         {:error, :not_found}
 
-      %Token{} = token ->
+      [%Token{} = token, %BridgedToken{} = bridged_token] ->
+        foreign_token_contract_address_hash = Map.get(bridged_token, :foreign_token_contract_address_hash)
+        foreign_chain_id = Map.get(bridged_token, :foreign_chain_id)
+
+        extended_token =
+          token
+          |> Map.put(:foreign_token_contract_address_hash, foreign_token_contract_address_hash)
+          |> Map.put(:foreign_chain_id, foreign_chain_id)
+
+        {:ok, extended_token}
+
+      [%Token{} = token, nil] ->
         {:ok, token}
     end
   end

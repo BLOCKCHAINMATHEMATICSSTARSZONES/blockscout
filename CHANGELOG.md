@@ -1,18 +1,69 @@
 ## Current
 
 ### Features
+
+### Fixes
+
+### Chore
+
+
+## 3.3.2-beta
+
+### Features
+- [#3252](https://github.com/poanetwork/blockscout/pull/3252) - Gas price at the main page
+- [#3239](https://github.com/poanetwork/blockscout/pull/3239) - Hide address page tabs if no items
+- [#3236](https://github.com/poanetwork/blockscout/pull/3236) - Easy verification of contracts which hash verified twins (the same bytecode)
+- [#3227](https://github.com/poanetwork/blockscout/pull/3227) - Distinguishing of bridged tokens
+- [#3224](https://github.com/poanetwork/blockscout/pull/3224) - Top tokens page
+
+### Fixes
+- [#3249](https://github.com/poanetwork/blockscout/pull/3249) - Fix incorrect ABI decoding of address in tuple output
+- [#3237](https://github.com/poanetwork/blockscout/pull/3237) - Refine contract method signature detection for read/write feature
+- [#3235](https://github.com/poanetwork/blockscout/pull/3235) - Fix coin supply api edpoint
+- [#3233](https://github.com/poanetwork/blockscout/pull/3233) - Fix for the contract verifiaction for solc 0.5 family with experimental features enabled
+- [#3231](https://github.com/poanetwork/blockscout/pull/3231) - Improve search: unlimited number of searching results
+- [#3231](https://github.com/poanetwork/blockscout/pull/3231) - Improve search: allow search with space
+- [#3231](https://github.com/poanetwork/blockscout/pull/3231) - Improve search: order by token holders in descending order and token/contract name is ascending order
+- [#3226](https://github.com/poanetwork/blockscout/pull/3226) - Fix notifier query for live update of token transfers
+- [#3220](https://github.com/poanetwork/blockscout/pull/3220) - Allow interaction with navbar menu at block-not-found page
+
+### Chore
+- [#3250](https://github.com/poanetwork/blockscout/pull/3250) - Eliminate occurrences of obsolete env variable ETHEREUM_JSONRPC_JSON_RPC_TRANSPORT
+- [#3240](https://github.com/poanetwork/blockscout/pull/3240), [#3251](https://github.com/poanetwork/blockscout/pull/3251) - various CSS imroving
+- [f3a720](https://github.com/poanetwork/blockscout/commit/2dd909c10a79b0bf4b7541a486be114152f3a720) - Make wobserver optional
+
+
+## 3.3.1-beta
+
+### Features
+- [#3216](https://github.com/poanetwork/blockscout/pull/3216) - Display new token transfers at token page and address page without refreshing the page
+- [#3199](https://github.com/poanetwork/blockscout/pull/3199) - Show compilation error at contract verification
 - [#3193](https://github.com/poanetwork/blockscout/pull/3193) - Raw trace copy button
 - [#3184](https://github.com/poanetwork/blockscout/pull/3184) - Apps navbar menu item
 - [#3145](https://github.com/poanetwork/blockscout/pull/3145) - Pending txs per address API endpoint
 
 ### Fixes
+- [#3219](https://github.com/poanetwork/blockscout/pull/3219) - Fix revert reason message detection
+- [#3215](https://github.com/poanetwork/blockscout/pull/3215) - Coveralls in CI through Github Actions
+- [#3214](https://github.com/poanetwork/blockscout/pull/3214) - Fix current token balances fetcher
+- [#3143](https://github.com/poanetwork/blockscout/pull/3143) - Fix "Connection lost..." error at address page
+- [#3209](https://github.com/poanetwork/blockscout/pull/3209) - GraphQL: fix internal server error at request of internal transactions at address
+- [#3207](https://github.com/poanetwork/blockscout/pull/3207) - Fix read contract bytes array type output
+- [#3203](https://github.com/poanetwork/blockscout/pull/3203) - Improve "get mined blocks" query performance
+- [#3202](https://github.com/poanetwork/blockscout/pull/3202) - Fix contracts verification with experimental features enabled
+- [#3201](https://github.com/poanetwork/blockscout/pull/3201) - Connect to Metamask button
 - [#3192](https://github.com/poanetwork/blockscout/pull/3192) - Dropdown menu doesn't open at "not found" page
 - [#3190](https://github.com/poanetwork/blockscout/pull/3190) - Contract log/method decoded view improvements: eliminate horizontal scroll, remove excess borders, whitespaces
 - [#3185](https://github.com/poanetwork/blockscout/pull/3185) - Transaction page: decoding logs from nested contracts calls
+- [#3182](https://github.com/poanetwork/blockscout/pull/3182) - Besu: support revertReason key in eth_getTransactionReceipt endpoint
 - [#3178](https://github.com/poanetwork/blockscout/pull/3178) - Fix permanent fetching tokens...  when read/write proxy tab is active
 - [#3178](https://github.com/poanetwork/blockscout/pull/3178) - Fix unavailable navbar menu when read/write proxy tab is active
 
 ### Chore
+- [#3212](https://github.com/poanetwork/blockscout/pull/3212) - GitHub actions CI config
+- [#3210](https://github.com/poanetwork/blockscout/pull/3210) - Update Phoenix up to 1.4.17
+- [#3206](https://github.com/poanetwork/blockscout/pull/3206) - Update Elixir version: 1.10.2 -> 1.10.3
+- [#3204](https://github.com/poanetwork/blockscout/pull/3204) - GraphQL Absinthe related packages update up to stable versions
 - [#3180](https://github.com/poanetwork/blockscout/pull/3180) - Return correct status in verify API endpoint if contract verified
 - [#3180](https://github.com/poanetwork/blockscout/pull/3180) - Remove Kovan from the list of default chains
 
